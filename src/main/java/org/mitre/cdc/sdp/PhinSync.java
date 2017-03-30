@@ -8,6 +8,10 @@ import java.net.URL;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.Options;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -26,13 +30,38 @@ public class PhinSync {
 	private Log logger=LogFactory.getLog(PhinSync.class);
 	private VocabService service;
 	private String esSearchUrl;
+	private String phinVadsUrl;
 
 	public PhinSync() {
 		this.esSearchUrl = "http://127.0.0.1:9200";
+		this.phinVadsUrl = "https://phinvads.cdc.gov/vocabService/v2";
 	}
 
 	public PhinSync(String esSerachUrl) {
 		this.esSearchUrl = esSerachUrl;
+		this.phinVadsUrl = "https://phinvads.cdc.gov/vocabService/v2";
+	}
+	
+	public PhinSync(String esSerachUrl, String phinVadsUrl) {
+		this.esSearchUrl = esSerachUrl;
+		this.phinVadsUrl = phinVadsUrl;
+	}
+	
+	
+	public String getEsSearchUrl() {
+		return esSearchUrl;
+	}
+
+	public void setEsSearchUrl(String esSearchUrl) {
+		this.esSearchUrl = esSearchUrl;
+	}
+
+	public String getPhinVadsUrl() {
+		return phinVadsUrl;
+	}
+
+	public void setPhinVadsUrl(String phinVadsUrl) {
+		this.phinVadsUrl = phinVadsUrl;
 	}
 
 	private VocabService getService() {
@@ -44,7 +73,7 @@ public class PhinSync {
 		logger.debug("Building hessian client");
 		HessianProxyFactory factory = new HessianProxyFactory();
 		try {
-			service = (VocabService) factory.create(VocabService.class, "http://phinvads.cdc.gov/vocabService/v2");
+			service = (VocabService) factory.create(VocabService.class, phinVadsUrl);
 		} catch (MalformedURLException e) {
 			logger.debug("Error creating client", e);
 		}
@@ -53,7 +82,6 @@ public class PhinSync {
 	}
 
 	private void syncCodeSystemCodes(String oid) throws Exception {
-		System.out.println("CODE SYSTEMS CODES");
 		logger.info("Syncing CodeSytemCodesfor " + oid);
 		int page = 1;
 		int perPage = 1000;
@@ -74,7 +102,6 @@ public class PhinSync {
 	}
 
 	private void syncCodeSystems() throws Exception {
-		System.out.println("CODE SYSTEMS");
 		logger.debug("Syncing Code Systems");
 		List<CodeSystem> codeSystems = getService().getAllCodeSystems().getCodeSystems();
 		for (Iterator<CodeSystem> iterator = codeSystems.iterator(); iterator.hasNext();) {
@@ -134,10 +161,25 @@ public class PhinSync {
 	}
 
 	public static void main(String[] args) throws Exception {
+		PhinSync sync  = new PhinSync();
+		Options options = new Options();
+		// add t option
+		options.addOption("e", true, "Elastic Search URL");
+		options.addOption("v", true , "PHIN VADS URL");
 		
-		PhinSync sync = args.length == 0 ? new PhinSync() : new PhinSync(args[0]);
+		CommandLineParser parser = new DefaultParser();
+		CommandLine cmd = parser.parse( options, args);
+		if(cmd.hasOption('e')){
+			sync.setEsSearchUrl(cmd.getOptionValue('e'));
+		}
+		if(cmd.hasOption('v')){
+			sync.setPhinVadsUrl(cmd.getOptionValue('v'));
+		}
+		
 		sync.syncCodeSystems();
 		sync.syncValueSets();
 		sync.syncValueSetVersions();
+		
+		
 	}
 }
