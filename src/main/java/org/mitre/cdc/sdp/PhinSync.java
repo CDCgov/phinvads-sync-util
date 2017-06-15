@@ -5,15 +5,19 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.log4j.Logger;
 
 import com.caucho.hessian.client.HessianProxyFactory;
 import com.google.gson.Gson;
@@ -25,9 +29,10 @@ import gov.cdc.vocab.service.bean.CodeSystemConcept;
 import gov.cdc.vocab.service.bean.ValueSet;
 import gov.cdc.vocab.service.bean.ValueSetVersion;
 import gov.cdc.vocab.service.dto.output.CodeSystemConceptResultDto;
+import gov.cdc.vocab.service.dto.output.ValueSetConceptResultDto;
 
 public class PhinSync {
-	private Log logger=LogFactory.getLog(PhinSync.class);
+	private Logger logger = Logger.getLogger(PhinSync.class);
 	private VocabService service;
 	private String esSearchUrl;
 	private String phinVadsUrl;
@@ -41,13 +46,12 @@ public class PhinSync {
 		this.esSearchUrl = esSerachUrl;
 		this.phinVadsUrl = "https://phinvads.cdc.gov/vocabService/v2";
 	}
-	
+
 	public PhinSync(String esSerachUrl, String phinVadsUrl) {
 		this.esSearchUrl = esSerachUrl;
 		this.phinVadsUrl = phinVadsUrl;
 	}
-	
-	
+
 	public String getEsSearchUrl() {
 		return esSearchUrl;
 	}
@@ -84,7 +88,7 @@ public class PhinSync {
 	private void syncCodeSystemCodes(String oid) throws Exception {
 		logger.info("Syncing CodeSytemCodesfor " + oid);
 		int page = 1;
-		int perPage = 1000;
+		int perPage = 10000;
 		int returned = 0;
 		CodeSystemConceptResultDto result = null;
 		do {
@@ -127,9 +131,49 @@ public class PhinSync {
 		logger.debug("Syncing Valuesets");
 		List<ValueSet> vsv = getService().getAllValueSets().getValueSets();
 		for (Iterator<ValueSet> iterator = vsv.iterator(); iterator.hasNext();) {
-			ValueSet valueSet =  iterator.next();
+			ValueSet valueSet = iterator.next();
 			logger.info("Processing Valueset " + valueSet.getName());
 			updateElasticSearch("value_sets", "value_set", valueSet.getId(), objectToJSON(valueSet));
+		}
+	}
+
+	public void countCodes() {
+		Map<String, ValueSet> valueSets = new HashMap<String, ValueSet>();
+		List<ValueSet> vsets = getService().getAllValueSets().getValueSets();
+		for (Iterator<ValueSet> iterator = vsets.iterator(); iterator.hasNext();) {
+			ValueSet valueSet = iterator.next();
+			logger.info("Processing Valueset " + valueSet.getName());
+			valueSets.put(valueSet.getOid(), valueSet);
+		}
+		int maxVersionNumber = 0;
+		Map<String, Map<Integer, Integer>> counts = new HashMap<String, Map<Integer, Integer>>();
+		List<ValueSetVersion> vsv = getService().getAllValueSetVersions().getValueSetVersions();
+		for (Iterator<ValueSetVersion> iterator = vsv.iterator(); iterator.hasNext();) {
+			ValueSetVersion valueSetVersion = iterator.next();
+			ValueSetConceptResultDto dto = getService().getValueSetConceptsByValueSetVersionId(valueSetVersion.getId(),
+					1, 10);
+			logger.info("Processing Valueset " + valueSetVersion.getValueSetOid() + " "
+					+ valueSetVersion.getVersionNumber() + " " + dto.getTotalResults());
+			if (!counts.containsKey(valueSetVersion.getValueSetOid())) {
+				counts.put(valueSetVersion.getValueSetOid(), new HashMap<Integer, Integer>());
+			}
+			counts.get(valueSetVersion.getValueSetOid()).put(valueSetVersion.getVersionNumber(), dto.getTotalResults());
+			maxVersionNumber = maxVersionNumber < valueSetVersion.getVersionNumber()
+					? valueSetVersion.getVersionNumber() : maxVersionNumber;
+		}
+
+		for (String oid : counts.keySet()) {
+			Map<Integer, Integer> versions = counts.get(oid);
+			ValueSet vset = valueSets.get(oid);
+			StringBuffer buff = new StringBuffer();
+			buff.append(vset.getName() + "," + oid);
+			for (int i = 1; i <= maxVersionNumber; i++) {
+				buff.append(",");
+				if (versions.containsKey(i)) {
+					buff.append(versions.get(i));
+				}
+			}
+			System.out.println(buff.toString());
 		}
 	}
 
@@ -161,25 +205,24 @@ public class PhinSync {
 	}
 
 	public static void main(String[] args) throws Exception {
-		PhinSync sync  = new PhinSync();
+		PhinSync sync = new PhinSync();
 		Options options = new Options();
 		// add t option
 		options.addOption("e", true, "Elastic Search URL");
-		options.addOption("v", true , "PHIN VADS URL");
-		
+		options.addOption("v", true, "PHIN VADS URL");
+
 		CommandLineParser parser = new DefaultParser();
-		CommandLine cmd = parser.parse( options, args);
-		if(cmd.hasOption('e')){
+		CommandLine cmd = parser.parse(options, args);
+		if (cmd.hasOption('e')) {
 			sync.setEsSearchUrl(cmd.getOptionValue('e'));
 		}
-		if(cmd.hasOption('v')){
+		if (cmd.hasOption('v')) {
 			sync.setPhinVadsUrl(cmd.getOptionValue('v'));
 		}
-		
-		sync.syncCodeSystems();
-		sync.syncValueSets();
-		sync.syncValueSetVersions();
-		
-		
+
+		sync.countCodes();
+		// sync.syncValueSets();
+		// sync.syncValueSetVersions();
+
 	}
 }
