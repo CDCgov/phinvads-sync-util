@@ -19,6 +19,6 @@ elsif operation == "sync_vs"
 elsif operation == "sync_cs"
   oid ? sync.sync_code_system(oid) : sync.sync_code_systems
 else
-  puts "Unknown operation "
+  puts "Unknown operation #{operation}"
   puts opts
 end
