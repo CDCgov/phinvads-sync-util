@@ -5,6 +5,13 @@ require 'logger'
 
 class VadsSync
   
+  # Create a new sync utility
+  # @param: es_uri  url to the elasticsearch server to update 
+  # @param: vads_uri url to the phinvads hessian api endpoint 
+  # @param: force_reload if an item is already found in elasticsearch this controls whether or    
+  #         not to force a reload item (defaults to false)
+  # @param: use_latest when syncing valuesets this controls whether or not to sync just the latest version
+  #                    or whether ot sync all versions (defaults to true)
   def initialize(es_uri, vads_uri, force_reload=false, use_latest=true)
     @es_client = create_es_client(es_uri)
     @vads_client = create_vads_client(vads_uri)
