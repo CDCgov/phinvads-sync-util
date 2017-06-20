@@ -4,6 +4,7 @@ require 'json'
 require 'logger'
 
 class VadsSync
+  
   def initialize(es_uri, vads_uri, force_reload=false, use_latest=true)
     @es_client = create_es_client(es_uri)
     @vads_client = create_vads_client(vads_uri)
@@ -13,6 +14,7 @@ class VadsSync
     ensure_indexes
   end
 
+  # sync all of the code systems in PHIN VADS to elastic search 
   def sync_code_systems()
     logger.debug "Sync code systems"
     @code_systems = @vads_client.getAllCodeSystems.getCodeSystems
@@ -29,6 +31,7 @@ class VadsSync
     end
   end
 
+  # Sync an individual code system into elastic search
   def sync_code_system(oid)
     logger.debug "Sync code systems"
     cs = @vads_client.getCodeSystemByOid(oid).getCodeSystem
@@ -43,6 +46,7 @@ class VadsSync
 
   end
 
+  # Sync all of the valuesets and all of the versions into elastic search
   def sync_value_sets()
     logger.debug "Sync valuesets "
     #get all of the versions and valuesets and map them together
@@ -71,6 +75,7 @@ class VadsSync
 
   end
 
+  # Sync the codes for a valueset version into elastic search 
   def sync_valueset_versions(vs)
     logger.debug "updating valueset versions "
     vset = vs[:valueset]
@@ -88,7 +93,8 @@ class VadsSync
       end
     end
   end
-
+  
+  #sync a valueset into elastic search, if a version is not supplied the latest version will be used
   def sync_valueset(oid,version=nil)
     vset = @vads_client.getValueSetByOid(oid).getValueSet
     versions = @vads_client.getValueSetVersionsByValueSetOid(oid).getValueSetVersions
@@ -110,6 +116,7 @@ class VadsSync
     end
   end
 
+  # Sync all of the codes for a code system into elastic search 
   def sync_code_system_codes(oid)
     start = Time.now
     page = 1
@@ -133,6 +140,7 @@ class VadsSync
     logger.debug "Took #{Time.now - start}"
   end
 
+  #sync all of the codes for a valueset version into elastic search
   def sync_valueset_codes(oid, version_number, version_id)
     start = Time.now
     count = 0
@@ -163,15 +171,17 @@ class VadsSync
     logger.debug "Took #{Time.now - start}"
 
   end
-
+  
+  # try and get a code system from elastic search 
   def get_code_system_from_es(oid)
     es_get('code_systems','code_system',  oid)
   end
-
+  # try and get a valueset from elastic search 
   def get_vs_from_es(oid)
     es_get('value_sets', 'value_set', oid)
   end
 
+  # try and get an object from elasticsearch
   def es_get(index, type, id)
     begin
       return @es_client.get index: index, type: type , id: id
@@ -179,6 +189,7 @@ class VadsSync
     end
   end
 
+  # map a phinvads code system object into a json doucument to add to elasticsearch
   def code_system_to_json(code_system)
     keys = [:oid,:id,:name,:definitionText,:status,:statusDate,:version,
       :versionDescription,:acquiredDate,:effectiveDate,:expiryDate,
@@ -193,6 +204,7 @@ class VadsSync
     hash
   end
 
+  # Map a code system code to a json object for insertion into elastic search
   def code_system_code_to_json(concept)
     keys = [:id,:name,:codeSystemOid,:conceptCode,:sdoPreferredDesignation,
       :definitionText,:preCoordinatedFlag,:preCoordinatedConceptNote,
@@ -206,6 +218,7 @@ class VadsSync
     hash
   end
 
+  # map a phinvads valueset into a josn document for insertion in eastic search
   def value_set_to_json(vs)
     keys = [:id,:oid,:name,:code,:status,
       :statusDate,:definitionText,:scopeNoteText,
@@ -230,6 +243,7 @@ class VadsSync
     hash
   end
 
+  #map a valueset code into a json representation for insertion in elastic search
   def valueset_code_to_json(code)
 
     json = {}
@@ -241,6 +255,7 @@ class VadsSync
     json
   end
 
+   # map a valueset version and it's codes into a json document for insertion in elastic search
   def valueset_to_fhir(vs, version, codes = [])
     json = {version: version,
       name: vs.name,
@@ -253,15 +268,21 @@ class VadsSync
     json
   end
 
+  # create a new Elasticsearch client
   def create_es_client(uri)
     Elasticsearch::Client.new(host: uri)
   end
 
+  # create a new phinvads api client, this is a java object pulled in from the 
+  #phinvads api jar file
   def create_vads_client(uri)
     factory = com.caucho.hessian.client.HessianProxyFactory.new
     factory.create(Java::GovCdcVocabService::VocabService.java_class,uri)
   end
 
+  # make sure all of the indexes that are required are in elasticsearch
+  # trying to put documents in es without the index being there throws an 
+  # exception
   def ensure_indexes()
     [:codes,:code_systems,:valuesets,:valueset_versions].each do |index|
       unless @es_client.indices.exists? index: index
@@ -270,6 +291,7 @@ class VadsSync
     end
   end
 
+  # create a logger for printing messages to stdout, slightly better than puts 
   def logger
     @@logger ||= Logger.new(STDOUT)
   end
