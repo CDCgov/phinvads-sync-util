@@ -60,3 +60,16 @@ Valuesets are synced into the elasticserach server as valueset versions.  Within
  /valueset_versions/{oid}/{version_number}
 
 Each of the versions is formated as a FHIR ValueSet object complete with the codes that they contain.
+
+
+## Building
+
+
+## Running
+java -jar target/phinvads-sync-util.jar
+
+[options]
+    -e, --elasticsearch  elastic search host
+    -v, --vads           PHINVADS api url
+    -o, --operation      operation to run (sync_all, sync_vs[:oid:version], sync_cs[:oid])
+    -f, --force          force reindex
