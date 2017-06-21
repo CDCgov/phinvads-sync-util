@@ -16,7 +16,7 @@
 		</dependency>
 
 
-  
+
 		<!-- https://mvnrepository.com/artifact/commons-cli/commons-cli -->
 		<dependency>
 			<groupId>commons-cli</groupId>
@@ -71,6 +71,29 @@
 	<build>
 		<finalName>phinvads-sync-util</finalName>
 		<plugins>
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.0.2</version>
+        <executions>
+          <execution>
+            <id>copy-resources</id>
+            <!-- here the phase you need -->
+            <phase>validate</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${basedir}/target/classes</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>lib/</directory>
+                  <filtering>true</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
@@ -83,7 +106,7 @@
 						</goals>
 						<configuration>
 							<artifactSet>
-							
+
 								<excludes>
 									<exclude>classworlds:classworlds</exclude>
 									<exclude>junit:junit</exclude>

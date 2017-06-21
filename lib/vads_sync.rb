@@ -14,18 +14,17 @@ class VadsSync
   # @param: use_latest when syncing valuesets this controls whether or not to sync just the latest version
   #                    or whether ot sync all versions (defaults to true)
   def initialize(es_uri, vads_uri, force_reload=false, use_latest=true)
-    @es_client = create_es_client(es_uri)
-    @vads_client = create_vads_client(vads_uri)
+    @es_uri  = es_uri
+    @vads_uri = vads_uri
     @force=force_reload
     @use_latest = use_latest
     @max_vs_concept_length=100000
-    ensure_indexes
   end
 
   # sync all of the code systems in PHIN VADS to elastic search
   def sync_code_systems()
     logger.debug "Sync code systems"
-    @code_systems = @vads_client.getAllCodeSystems.getCodeSystems
+    @code_systems = vads_client.getAllCodeSystems.getCodeSystems
     @code_systems.each do |cs|
       logger.debug "working code system #{cs.name}"
       json = code_system_to_json(cs)
@@ -33,7 +32,7 @@ class VadsSync
       if !es_cs || @force
         logger.debug "calling syncing codes for #{cs.name}"
         sync_code_system_codes(cs.oid)
-        @es_client.update index: 'code_systems',  type: "code_system",  id: cs.oid,  body: { doc: json, doc_as_upsert: true }
+        es_client.update index: 'code_systems',  type: "code_system",  id: cs.oid,  body: { doc: json, doc_as_upsert: true }
       end
 
     end
@@ -42,7 +41,7 @@ class VadsSync
   # Sync an individual code system into elastic search
   def sync_code_system(oid)
     logger.debug "Sync code systems"
-    cs = @vads_client.getCodeSystemByOid(oid).getCodeSystem
+    cs = vads_client.getCodeSystemByOid(oid).getCodeSystem
     logger.debug "working code system #{cs.name}"
     json = code_system_to_json(cs)
     es_cs = get_code_system_from_es(cs.oid)
@@ -50,7 +49,7 @@ class VadsSync
       logger.debug "calling syncing codes for #{cs.name}"
       sync_code_system_codes(cs.oid)
       logger.debug "adding code_system to index"
-      @es_client.update index: 'code_systems',  type: "code_system",  id: cs.oid,  body: { doc: json, doc_as_upsert: true }
+      es_client.update index: 'code_systems',  type: "code_system",  id: cs.oid,  body: { doc: json, doc_as_upsert: true }
     end
 
   end
@@ -61,8 +60,8 @@ class VadsSync
     #get all of the versions and valuesets and map them together
     #this is cleaner and easier than getting the vs and the getting all of it's versions
     # separately
-    valuesets = @vads_client.getAllValueSets.getValueSets
-    versions = @vads_client.getAllValueSetVersions.getValueSetVersions
+    valuesets = vads_client.getAllValueSets.getValueSets
+    versions = vads_client.getAllValueSetVersions.getValueSetVersions
     temp = {}
     valuesets.each do |vs|
       temp[vs.oid] = {valueset: vs, versions:[]}
@@ -78,7 +77,7 @@ class VadsSync
       es_vs = es_get('valuesets', 'valueset', vs[:valueset].oid)
       if !es_vs || @force
         sync_valueset_versions(vs)
-        @es_client.update index: 'valuesets',  type: "valueset",  id: vs[:valueset].oid,  body: { doc: json, doc_as_upsert: true }
+        es_client.update index: 'valuesets',  type: "valueset",  id: vs[:valueset].oid,  body: { doc: json, doc_as_upsert: true }
       end
     end
 
@@ -97,7 +96,7 @@ class VadsSync
         logger.debug "getting codes for version #{ver.versionNumber}"
 
         json = valueset_to_fhir(vset, ver.versionNumber, [])
-        @es_client.update index: 'valueset_versions',  type: vset.oid,  id: ver.versionNumber,  body: { doc: json, doc_as_upsert: true }
+        es_client.update index: 'valueset_versions',  type: vset.oid,  id: ver.versionNumber,  body: { doc: json, doc_as_upsert: true }
         sync_valueset_codes(vset.oid, ver.versionNumber, ver.id)
       end
     end
@@ -105,12 +104,12 @@ class VadsSync
 
   #sync a valueset into elastic search, if a version is not supplied the latest version will be used
   def sync_valueset(oid,version=nil)
-    vset = @vads_client.getValueSetByOid(oid).getValueSet
-    versions = @vads_client.getValueSetVersionsByValueSetOid(oid).getValueSetVersions
+    vset = vads_client.getValueSetByOid(oid).getValueSet
+    versions = vads_client.getValueSetVersionsByValueSetOid(oid).getValueSetVersions
     if version == "latest"
       versions = [versions[0]]
     elsif version
-      ver = versions.find{|v| v.versionNumber == version}
+      ver = versions.find{|v| v.versionNumber == version.to_i}
       versions = [ver].compact
     end
     versions.each do |ver|
@@ -119,7 +118,7 @@ class VadsSync
         logger.debug "getting codes for version #{ver.versionNumber}"
 
         json = valueset_to_fhir(vset, ver.versionNumber, [])
-        @es_client.update index: 'valueset_versions',  type: vset.oid,  id: ver.versionNumber,  body: { doc: json, doc_as_upsert: true }
+        es_client.update index: 'valueset_versions',  type: vset.oid,  id: ver.versionNumber,  body: { doc: json, doc_as_upsert: true }
         sync_valueset_codes(vset.oid, ver.versionNumber, ver.id)
       end
     end
@@ -133,7 +132,7 @@ class VadsSync
     limit = 1000
     loop do
       logger.debug "calling get concepts"
-      dto = @vads_client.getCodeSystemConceptsByCodeSystemOid(oid, page, limit)
+      dto = vads_client.getCodeSystemConceptsByCodeSystemOid(oid, page, limit)
       length = dto.getCodeSystemConcepts.length
       logger.debug "syncing concepts #{count} to #{count + length} of #{dto.getTotalResults()} "
       count = count + length
@@ -144,7 +143,7 @@ class VadsSync
         bulks << {update: {_index: 'codes',   _type: oid, _id: con.id,  data: { doc: json, doc_as_upsert: true }}}
       end
       logger.debug "bulk adding codes to ES"
-      @es_client.bulk body: bulks
+      es_client.bulk body: bulks
       break if count >= dto.getTotalResults()
     end
     logger.debug "Took #{Time.now - start}"
@@ -157,7 +156,7 @@ class VadsSync
     page = 1
     limit = 1000
     loop do
-      dto = @vads_client.getValueSetConceptsByValueSetVersionId(version_id, page, limit)
+      dto = vads_client.getValueSetConceptsByValueSetVersionId(version_id, page, limit)
       break if dto.getTotalResults() > @max_vs_concept_length
       length = dto.getValueSetConcepts ? dto.getValueSetConcepts.length : 0
       logger.debug "getting vs codes #{count} to #{count + length} of #{dto.getTotalResults()} "
@@ -168,7 +167,7 @@ class VadsSync
         codes << valueset_code_to_json(code)
       end
 
-      @es_client.update index: 'valueset_versions',
+      es_client.update index: 'valueset_versions',
       type: oid,
       id: version_number,
       body: { script: {inline: "ctx._source.expansion.contains.add( params.contains)",
@@ -194,7 +193,7 @@ class VadsSync
   # try and get an object from elasticsearch
   def es_get(index, type, id)
     begin
-      return @es_client.get index: index, type: type , id: id
+      return es_client.get index: index, type: type , id: id
     rescue
     end
   end
@@ -279,18 +278,138 @@ class VadsSync
   end
 
 
+  def sync_code_systems_to_csv(dir)
+    logger.debug "Sync code systems"
+    code_systems = vads_client.getAllCodeSystems.getCodeSystems
+    code_systems.each do |cs|
+      sync_code_system_to_csv(cs,dir)
+    end
+  end
+
+  def sync_code_system_metadata_to_csv(dir)
+    logger.debug "Sync code systems"
+    code_systems = vads_client.getAllCodeSystems.getCodeSystems
+    csv = CSV.open("#{dir}/code_systems.csv", "w+", {headers: :first_row})
+    props = [:oid,:id,:name,:definitionText,:status,:statusDate,:version,
+      :versionDescription,:acquiredDate,:effectiveDate,:expiryDate,
+      :assigningAuthorityVersionName,:assigningAuthorityReleaseDate,
+      :distributionSourceVersionName,:distributionSourceReleaseDate,
+      :distributionSourceId,:sdoCreateDate,:lastRevisionDate,:sdoReleaseDate]
+      csv << props
+    code_systems.each do |cs|
+      csv << props.collect{|p| cs.send p}
+    end
+    csv.close
+  end
+
+  def sync_value_set_metatdata_to_csv(dir)
+    valuesets = vads_client.getAllValueSets.getValueSets
+    csv = CSV.open("#{dir}/valuesets.csv", "w+", {headers: :first_row})
+    csv << [:id, :oid, :name, :description]
+    valuesets.each do |vs|
+      csv << [vs.id, vs.oid,  vs.name, vs.definitionText]
+    end
+    csv.close
+  end
+
+  def sync_value_sets_to_csv(dir)
+    valuesets = vads_client.getAllValueSets.getValueSets
+    valuesets.each do |vs|
+      sync_value_set_to_csv(vs.oid,"latest",dir)
+    end
+    csv.close
+  end
+
+  def sync_code_system_to_csv_by_oid(oid, dir)
+    cs = vads_client.getCodeSystemByOid(oid).getCodeSystem
+    sync_code_system_to_csv(cs,dir)
+  end
+
+  def sync_code_system_to_csv(cs, dir)
+
+    props = [:id,:name,:codeSystemOid,:conceptCode,:sdoPreferredDesignation,
+      :definitionText,:preCoordinatedFlag,:preCoordinatedConceptNote,
+      :sdoConceptCreatedDate,:sdoConceptRevisionDate,:status,:statusDate,
+      :sdoConceptStatus,:sdoConceptStatusDate,:supersededByCodeSystemConceptId,
+      :umlsCui,:umlsAui]
+    logger.debug "working code system #{cs.name}"
+    csv = CSV.open("#{dir}/#{cs.oid}.csv", "w+", {headers: :first_row})
+    csv << props
+    start = Time.now
+    page = 1
+    count = 0
+    limit = 10000
+    loop do
+      logger.debug "calling get concepts"
+      dto = vads_client.getCodeSystemConceptsByCodeSystemOid(cs.oid, page, limit)
+      length = dto.getCodeSystemConcepts.length
+      logger.debug "syncing concepts #{count} to #{count + length} of #{dto.getTotalResults()} "
+      count = count + length
+      page = page + 1
+      dto.getCodeSystemConcepts.each do |con|
+        concept_props = props.collect{|p| con.send p}
+        csv << concept_props
+      end
+      break if count >= dto.getTotalResults()
+    end
+    csv.close
+    logger.debug "Took #{Time.now - start}"
+
+  end
+
+
+  def sync_value_set_to_csv(oid,version="latest", dir=nil)
+    logger.debug "working valueset #{oid}"
+
+    versions = vads_client.getValueSetVersionsByValueSetOid(oid).getValueSetVersions
+    versions.sort!{|a,b| b.versionNumber <=> a.versionNumber}
+    ver = nil
+    if version == "latest"
+      ver = versions[0]
+    elsif version
+      ver = versions.find{|v| v.versionNumber == version}
+    end
+    return if ver.nil?
+    csv = CSV.open("#{dir}/valuesets/#{oid}_#{version}.csv", "w+", {headers: :first_row})
+    csv << [:system,:code, :display,:description]
+    start = Time.now
+    count = 0
+    page = 1
+    limit = 1000
+    loop do
+      dto = vads_client.getValueSetConceptsByValueSetVersionId(ver.id, page, limit)
+      length = dto.getValueSetConcepts ? dto.getValueSetConcepts.length : 0
+      logger.debug "getting vs codes #{count} to #{count + length} of #{dto.getTotalResults()} "
+      count = count +  length
+      page = page + 1
+      codes = []
+      dto.getValueSetConcepts.each do |code|
+        csv << [code.codeSystemOid,code.conceptCode,code.codeSystemConceptName,code.definitionText]
+      end
+      break if count >= dto.getTotalResults()
+    end
+    logger.debug "Took #{Time.now - start}"
+    csv.close
+  end
+
 
   # create a new Elasticsearch client
-  def create_es_client(uri)
-    Elasticsearch::Client.new(host: uri, adapter: :net_http)
+  def es_client()
+    if @es_client.nil?
+      @es_client = Elasticsearch::Client.new(host: @es_uri, adapter: :net_http)
+      ensure_indexes
+    end
+    @es_client
   end
 
 
   # create a new phinvads api client, this is a java object pulled in from the
   #phinvads api jar file
-  def create_vads_client(uri)
+  def vads_client()
+    return @vads_client if @vads_client
     factory = com.caucho.hessian.client.HessianProxyFactory.new
-    factory.create(Java::GovCdcVocabService::VocabService.java_class,uri)
+    @vads_client = factory.create(Java::GovCdcVocabService::VocabService.java_class,@vads_uri)
+    @vads_client
   end
 
   # make sure all of the indexes that are required are in elasticsearch
@@ -298,8 +417,8 @@ class VadsSync
   # exception
   def ensure_indexes()
     [:codes,:code_systems,:valuesets,:valueset_versions].each do |index|
-      unless @es_client.indices.exists? index: index
-        @es_client.indices.create index: index
+      unless es_client.indices.exists? index: index
+        es_client.indices.create index: index
       end
     end
   end
