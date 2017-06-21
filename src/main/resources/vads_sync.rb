@@ -4,11 +4,11 @@ require 'json'
 require 'logger'
 
 class VadsSync
-  
+
   # Create a new sync utility
-  # @param: es_uri  url to the elasticsearch server to update 
-  # @param: vads_uri url to the phinvads hessian api endpoint 
-  # @param: force_reload if an item is already found in elasticsearch this controls whether or    
+  # @param: es_uri  url to the elasticsearch server to update
+  # @param: vads_uri url to the phinvads hessian api endpoint
+  # @param: force_reload if an item is already found in elasticsearch this controls whether or
   #         not to force a reload item (defaults to false)
   # @param: use_latest when syncing valuesets this controls whether or not to sync just the latest version
   #                    or whether ot sync all versions (defaults to true)
@@ -21,7 +21,7 @@ class VadsSync
     ensure_indexes
   end
 
-  # sync all of the code systems in PHIN VADS to elastic search 
+  # sync all of the code systems in PHIN VADS to elastic search
   def sync_code_systems()
     logger.debug "Sync code systems"
     @code_systems = @vads_client.getAllCodeSystems.getCodeSystems
@@ -48,6 +48,7 @@ class VadsSync
     if !es_cs || @force
       logger.debug "calling syncing codes for #{cs.name}"
       sync_code_system_codes(cs.oid)
+      logger.debug "adding code_system to index"
       @es_client.update index: 'code_systems',  type: "code_system",  id: cs.oid,  body: { doc: json, doc_as_upsert: true }
     end
 
@@ -82,7 +83,7 @@ class VadsSync
 
   end
 
-  # Sync the codes for a valueset version into elastic search 
+  # Sync the codes for a valueset version into elastic search
   def sync_valueset_versions(vs)
     logger.debug "updating valueset versions "
     vset = vs[:valueset]
@@ -100,7 +101,7 @@ class VadsSync
       end
     end
   end
-  
+
   #sync a valueset into elastic search, if a version is not supplied the latest version will be used
   def sync_valueset(oid,version=nil)
     vset = @vads_client.getValueSetByOid(oid).getValueSet
@@ -123,7 +124,7 @@ class VadsSync
     end
   end
 
-  # Sync all of the codes for a code system into elastic search 
+  # Sync all of the codes for a code system into elastic search
   def sync_code_system_codes(oid)
     start = Time.now
     page = 1
@@ -141,6 +142,7 @@ class VadsSync
         json = code_system_code_to_json(con)
         bulks << {update: {_index: 'codes',   _type: oid, _id: con.id,  data: { doc: json, doc_as_upsert: true }}}
       end
+      logger.debug "bulk adding codes to ES"
       @es_client.bulk body: bulks
       break if count >= dto.getTotalResults()
     end
@@ -178,12 +180,12 @@ class VadsSync
     logger.debug "Took #{Time.now - start}"
 
   end
-  
-  # try and get a code system from elastic search 
+
+  # try and get a code system from elastic search
   def get_code_system_from_es(oid)
     es_get('code_systems','code_system',  oid)
   end
-  # try and get a valueset from elastic search 
+  # try and get a valueset from elastic search
   def get_vs_from_es(oid)
     es_get('value_sets', 'value_set', oid)
   end
@@ -280,7 +282,7 @@ class VadsSync
     Elasticsearch::Client.new(host: uri)
   end
 
-  # create a new phinvads api client, this is a java object pulled in from the 
+  # create a new phinvads api client, this is a java object pulled in from the
   #phinvads api jar file
   def create_vads_client(uri)
     factory = com.caucho.hessian.client.HessianProxyFactory.new
@@ -288,7 +290,7 @@ class VadsSync
   end
 
   # make sure all of the indexes that are required are in elasticsearch
-  # trying to put documents in es without the index being there throws an 
+  # trying to put documents in es without the index being there throws an
   # exception
   def ensure_indexes()
     [:codes,:code_systems,:valuesets,:valueset_versions].each do |index|
@@ -298,7 +300,7 @@ class VadsSync
     end
   end
 
-  # create a logger for printing messages to stdout, slightly better than puts 
+  # create a logger for printing messages to stdout, slightly better than puts
   def logger
     @@logger ||= Logger.new(STDOUT)
   end
