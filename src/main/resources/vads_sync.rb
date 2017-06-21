@@ -2,6 +2,7 @@ require "elasticsearch"
 require 'uri'
 require 'json'
 require 'logger'
+require 'csv'
 
 class VadsSync
 
@@ -277,10 +278,46 @@ class VadsSync
     json
   end
 
+
+  def sync_code_systems_to_csv
+    logger.debug "Sync code systems"
+    @code_systems = @vads_client.getAllCodeSystems.getCodeSystems
+    @code_systems.each do |cs|
+      sync_code_systems_to_csv(cs)
+    end
+  end
+
+  def sync_value_sets_to_csv
+
+  end
+
+  def sync_code_system_to_csv_by_oid(oid)
+
+  end
+
+  def sync_code_system_to_csv(cs)
+
+    logger.debug "working code system #{cs.name}"
+    json = code_system_to_json(cs)
+    es_cs = get_code_system_from_es(cs.oid)
+    if !es_cs || @force
+      logger.debug "calling syncing codes for #{cs.name}"
+      sync_code_system_codes(cs.oid)
+      @es_client.update index: 'code_systems',  type: "code_system",  id: cs.oid,  body: { doc: json, doc_as_upsert: true }
+    end
+  end
+
+
+  def sync_value_set_to_csv(oid,version_id=nil)
+
+  end
+
+
   # create a new Elasticsearch client
   def create_es_client(uri)
-    Elasticsearch::Client.new(host: uri)
+    Elasticsearch::Client.new(host: uri, adapter: :net_http)
   end
+
 
   # create a new phinvads api client, this is a java object pulled in from the
   #phinvads api jar file
