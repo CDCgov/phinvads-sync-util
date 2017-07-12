@@ -88,6 +88,6 @@ java -jar target/phinvads-sync-util.jar
 * Hit Create
 * Wait for maven to run and build the image
 * Open the deployment environment config and add:
-    * `JAVA_ARGS` as `-e http://es.sdp.svc:9200 -v https://phinvads.cdc.gov/vocabService/v2”`
-    * `no_proxy` as `es.sdp.svc`
+    * `JAVA_ARGS` as `-e http://${your_elasticsearch_host} -v https://phinvads.cdc.gov/vocabService/v2”`
+    * `no_proxy` if necessary to reach your elasticsearch host or phinvads service
 * Saving should trigger a redeploy, and the sync service should be running
