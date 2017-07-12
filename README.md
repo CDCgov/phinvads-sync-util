@@ -63,13 +63,31 @@ Each of the versions is formated as a FHIR ValueSet object complete with the cod
 
 
 ## Building
+```
+mvn package
+```
 
 
 ## Running
 java -jar target/phinvads-sync-util.jar
 
+```
 [options]
     -e, --elasticsearch  elastic search host
     -v, --vads           PHINVADS api url
     -o, --operation      operation to run (sync_all, sync_vs[:oid:version], sync_cs[:oid])
     -f, --force          force reindex
+```
+
+## Deploying on an Openshift cluster
+* Create a service through the Add To Project interface in the Openshift web console
+* Choose the redhat-openjdk18-openshift s2i image as the base image (`jdk` in the search bar is the fastest way to find it)
+* Name the service and add the github repository url (https://github.com/CDCgov/phinvads-sync-util)
+* If necessary, click the advanced options link and add the git reference 
+* Disable route creation
+* Hit Create
+* Wait for maven to run and build the image
+* Open the deployment environment config and add:
+    * `JAVA_ARGS` as `-e http://${your_elasticsearch_host} -v https://phinvads.cdc.gov/vocabService/v2”`
+    * `no_proxy` if necessary to reach your elasticsearch host or phinvads service
+* Saving should trigger a redeploy, and the sync service should be running
