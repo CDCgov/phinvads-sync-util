@@ -10,6 +10,28 @@
     <finalName>phinvads-sync-util</finalName>
     <plugins>
       <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.0.2</version>
+        <executions>
+          <execution>
+            <id>copy-resources</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${basedir}/target/classes</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>lib/</directory>
+                  <filtering>true</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.0.0</version>
         <executions>
@@ -27,16 +49,32 @@
                   <exclude>*:xml-apis</exclude>
                   <exclude>org.apache.maven:lib:tests</exclude>
                   <exclude>log4j:log4j:jar:</exclude>
+                  <exclude>*:*:gem:*</exclude>
                 </excludes>
               </artifactSet>
               <transformers>
                 <transformer>
-                  <mainClass>org.mitre.cdc.sdp.PhinSync</mainClass>
+                  <mainClass>org.jruby.JarBootstrapMain</mainClass>
                 </transformer>
               </transformers>
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>de.saumya.mojo</groupId>
+        <artifactId>gem-maven-plugin</artifactId>
+        <version>1.0.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>initialize</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <includeRubygemsInResources>true</includeRubygemsInResources>
+        </configuration>
       </plugin>
     </plugins>
   </build>
@@ -45,6 +83,10 @@
       <id>repo</id>
       <url>file://${basedir}/repo</url>
     </repository>
+    <repository>
+      <id>rubygems-release</id>
+      <url>http://rubygems-proxy.torquebox.org/releases</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
@@ -52,6 +94,33 @@
       <artifactId>junit</artifactId>
       <version>3.8.1</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
+      <version>1.2.17</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>rubygems</groupId>
+      <artifactId>elasticsearch</artifactId>
+      <version>5.0.3</version>
+      <type>gem</type>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>rubygems</groupId>
+      <artifactId>slop</artifactId>
+      <version>4.5.0</version>
+      <type>gem</type>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.jruby</groupId>
+      <artifactId>jruby</artifactId>
+      <version>9.1.9.0</version>
+      <type>pom</type>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 </project>
